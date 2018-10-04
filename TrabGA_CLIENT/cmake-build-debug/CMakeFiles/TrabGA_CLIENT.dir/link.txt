@@ -1,0 +1,1 @@
+/usr/bin/cc -g   CMakeFiles/TrabGA_CLIENT.dir/main.c.o  -o TrabGA_CLIENT 

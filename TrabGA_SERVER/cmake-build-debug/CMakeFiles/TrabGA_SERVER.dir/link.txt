@@ -1,0 +1,1 @@
+/usr/bin/cc -g   CMakeFiles/TrabGA_SERVER.dir/main.c.o  -o TrabGA_SERVER 
