@@ -1,0 +1,22 @@
+Alunos: Felipe Caon, Renan Santos.
+Disciplina: Sistemas Distribuídos e de Tempo Real.
+Professora: Janaína Sutil Lemos.
+
+Especificação do protocolo desenvolvido como trabalho do GA:
+TAMANHO DA CHAMADA: 4 BYTES
+TAMANHO DA RESPOSTA: 4 BYTES
+BYTE DE VERIFICAÇÃO: '1'
+
+CHAMADAS ACEITAS:
+Obs1.: 'XX' é o valor numérico retornado.
+Obs2.: os valores numéricos são limitados a dois dígitos.
+CHAMADA | RETORNO | DESCRIÇÃO
+"1TEM"	| "T:XX"  | Valor de temperatura do servidor
+"1UMI"	| "U:XX"  | Valor de umidade do ar
+"1VOL"  | "V:XX"  | Valor de volume
+
+ERROS:
+ERRO	| DESCRIÇÃO
+"IDER"	| Erro no código de identificação
+"CHER"	| Erro de chamada inexistente
+

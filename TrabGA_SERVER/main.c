@@ -19,16 +19,31 @@
 #include <stdbool.h>
 #include <float.h>
 
-#define MAXBUFSIZE 1000 // O tamanho max. do pacote UDP Packet é 64 Kbytes (65535 bytes, que é o valor máximo representado pelos dois bytes destinados ao tamanho do datagrama UDP).
+#define TAMANHO_BUFFER 1000 // O tamanho max. do pacote UDP Packet é 64 Kbytes (65535 bytes, que é o valor máximo representado pelos dois bytes destinados ao tamanho do datagrama UDP).
+#define TAMANHO_CHAMADA 4
+#define TAMANHO_RESPOSTA 4
+#define IDENTIFICADOR '1'
+#define CHAMADA_TEMPERATURA "TEM"
+#define CHAMADA_UMIDADE "UMI"
+#define CHAMADA_VOLUME "VOL"
+#define RANGE_VALORES 99
+#define ERRO_IDENTIFICADOR "IDER"
+#define ERRO_CHAMADA "CHER"
+
 
 int sock, status, socklen;
-unsigned char buffer[MAXBUFSIZE];
-unsigned char rng[MAXBUFSIZE];
+unsigned char buffer[TAMANHO_BUFFER];
+unsigned char valorTraduzidoParaString[TAMANHO_BUFFER];
+unsigned char chamada[TAMANHO_CHAMADA];
+unsigned char resposta[TAMANHO_RESPOSTA];
 struct sockaddr_in saddr;
+int temperatura;
+int volume;
+int umidade;
 
 void fechaSocket();
 
-void preencheBuffersComZeros();
+void limpaBuffers();
 
 void iniciaServidorUDP();
 
@@ -38,12 +53,156 @@ void medeTemperatura();
 
 void medeVolume();
 
-int temperatura;
-int volume;
-int umidade;
+void enviaMensagemIdentificadorInvalido();
+
+void limpaChamada();
+
+bool verificaCodigoDeIdentificacao(char[]);
+
+void configuraSocketUDP();
+
+void reverse(char *);
+
+void itoa(int, char[]);
+
+void limpaResposta();
+
+void preparaResposta(char[], int);
+
+void efetuaMedicoes();
+
+void escutaCliente();
+
+void decodificaBufferParaChamada();
+
+void enviaResposta();
+
+void preparaMensagemErroDeChamada();
+
+void filtraChamadas();
+
+//Descontados os cabeçalhos do UDP e do IP temos 65507 bytes.
+int main() {
+
+    configuraSocketUDP();
+
+    iniciaServidorUDP();
+
+    fechaSocket();
+
+    return 0;
+}
+
+void iniciaServidorUDP() {
+    while (1) {
+        srand(time(0));
+
+        efetuaMedicoes();
+
+        escutaCliente();
+
+        if(verificaCodigoDeIdentificacao(buffer)) {
+
+            limpaChamada();
+
+            limpaResposta();
+
+            decodificaBufferParaChamada();
+
+            printf("\tCHAMADA: %s\n", chamada);
+
+            filtraChamadas();
+
+            limpaBuffers();
+
+            enviaResposta();
+        }
+        else {
+            enviaMensagemIdentificadorInvalido();
+        }
+
+        // Preeenche o buffer com zeros
+        limpaBuffers();
+    }
+}
+
+void filtraChamadas() {
+    if(!strcmp(chamada, CHAMADA_TEMPERATURA)) {
+                printf("\tTEMPERATURA SOLICITADA, VALOR ATUAL: %i\n", temperatura);
+
+                preparaResposta("T:", temperatura);
+            }
+    if(!strcmp(chamada, CHAMADA_UMIDADE)) {
+                printf("\tUMIDADE SOLICITADA, VALOR ATUAL: %i\n", umidade);
+
+                preparaResposta("U:", umidade);
+            }
+    if(!strcmp(chamada, CHAMADA_VOLUME)) {
+                printf("\tVOLUME SOLICITADO, VALOR ATUAL: %i\n", volume);
+
+                preparaResposta("V:", volume);
+            }
+    if(strcmp(chamada, CHAMADA_VOLUME) && strcmp(chamada, CHAMADA_UMIDADE) && strcmp(chamada, CHAMADA_TEMPERATURA)) {
+                printf("\tCHAMADA INVALIDA: %s\n", chamada);
+
+                preparaMensagemErroDeChamada();
+            }
+}
+
+void preparaMensagemErroDeChamada() { strcat(resposta, ERRO_CHAMADA); }
+
+void enviaResposta() {
+    status = 0;
+
+    status = sendto(sock, resposta, strlen(resposta), 0,
+                            (struct sockaddr *) &saddr, socklen);
+}
+
+void decodificaBufferParaChamada() { strncpy(chamada, buffer + 1, 3); }
+
+void escutaCliente() {// Recebe dados do socket
+    status = recvfrom(sock, buffer, TAMANHO_BUFFER, 0,
+                          (struct sockaddr *) &saddr, &socklen);
+
+    printf("\n\tDado recebido: %s De: %s, port: %d\n", buffer, inet_ntoa(saddr.sin_addr), htons(saddr.sin_port));
+}
+
+void efetuaMedicoes() {
+    medeTemperatura();
+    medeUmidade();
+    medeVolume();
+}
+
+void enviaMensagemIdentificadorInvalido() {
+    printf("\tCodigo identificador invalido\n");
+    limpaResposta();
+    limpaBuffers();
+    strcat(resposta, ERRO_IDENTIFICADOR);
+    enviaResposta();
+}
+
+void medeVolume() { volume = 0 + rand() % RANGE_VALORES; }
+
+void medeTemperatura() { temperatura = 0 + rand() % RANGE_VALORES; }
+
+void medeUmidade() { umidade = 0 + rand() % RANGE_VALORES; }
+
+void limpaBuffers() {
+    memset(&buffer, 0, sizeof(buffer));
+    memset(&valorTraduzidoParaString, 0, sizeof(valorTraduzidoParaString));
+}
+
+void limpaResposta() { memset(&resposta, 0, sizeof(resposta)); }
+
+void limpaChamada() { memset(&chamada, 0, sizeof(chamada)); }
+
+void fechaSocket() {
+    shutdown(sock, 2);
+    close(sock);
+}
 
 bool verificaCodigoDeIdentificacao(char bufferDeVerificacao[]) {
-    if(bufferDeVerificacao[0] == '1') {
+    if(bufferDeVerificacao[0] == IDENTIFICADOR) {
         return true;
     }
     else {
@@ -112,83 +271,11 @@ void itoa(int n, char s[]) {
     reverse(s);
 }
 
-//Descontados os cabeçalhos do UDP e do IP temos 65507 bytes.
-int main() {
-
-    configuraSocketUDP();
-
-    iniciaServidorUDP();
-
-    fechaSocket();
-
-    return 0;
-}
-
-void iniciaServidorUDP() {
-    while (1) {
-        srand(time(0));
-
-        medeTemperatura();
-        medeUmidade();
-        medeVolume();
-
-        printf("\tTemperatura: %i\n", temperatura);
-
-        printf("\tUmidade: %i\n", umidade);
-
-        printf("\tVolume: %i\n", volume);
-
-
-        // Recebe dados do socket
-        status = recvfrom(sock, buffer, MAXBUFSIZE, 0,
-                          (struct sockaddr *) &saddr, &socklen);
-
-        // Envia resposta
-        printf("\tDado recebido: %s De: %s, port: %d\n\n", buffer, inet_ntoa(saddr.sin_addr), htons(saddr.sin_port));
-
-        // Verifica se o primeiro byte do buffer é igual a 1
-        if(verificaCodigoDeIdentificacao(buffer)) {
-            printf("\tEntrou aqui\n");
-            printf("\tEnviando resposta...\n");
-
-
-            itoa(temperatura, rng);
-            strcat(buffer, rng);
-
-            status = 0;
-            status = sendto(sock, buffer, strlen(buffer), 0,
-                            (struct sockaddr *) &saddr, socklen);
-        } else {
-            printf("\tNão entrou aqui, pois o valor do buffer é: %s \n", buffer);
-            printf("\tTem uma mensagem de erro genérica aqui\n");
-
-
-            preencheBuffersComZeros();
-
-            strcat(buffer, "255");
-
-            status = 0;
-            status = sendto(sock, buffer, strlen(buffer), 0,
-                            (struct sockaddr *) &saddr, socklen);
-        }
-
-        // Preeenche o buffer com zeros
-        preencheBuffersComZeros();
+void preparaResposta(char medida[], int valor) {
+    strcat(resposta, medida);
+    itoa(valor, valorTraduzidoParaString);
+    if(valor < 10) {
+        strcat(resposta, "0");
     }
-}
-
-void medeVolume() { volume = 1 + rand() % 9; }
-
-void medeTemperatura() { temperatura = 1 + rand() % 50; }
-
-void medeUmidade() { umidade = 1 + rand() % 100; }
-
-void preencheBuffersComZeros() {
-    memset(&buffer, 0, sizeof(buffer));
-    memset(&buffer, 0, sizeof(rng));
-}
-
-void fechaSocket() {
-    shutdown(sock, 2);
-    close(sock);
+    strcat(resposta, valorTraduzidoParaString);
 }
